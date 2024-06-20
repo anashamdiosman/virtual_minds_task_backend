@@ -111,7 +111,7 @@ class User extends Response {
     });
   };
 
-  signin = async ({ username, password, email }) => {
+  signin = async ({ username, password }) => {
     return new Promise(async (resolve, reject) => {
       try {
         if (!username || !password) {
@@ -141,6 +141,116 @@ class User extends Response {
 
         user.dataValues.token = jwtToken;
         return resolve(user);
+      } catch (error) {
+        return reject(error);
+      }
+    });
+  };
+
+  deleteUser = async ({ username }) => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const data = await UserModel.destroy({
+          where: {
+            username,
+          },
+        });
+
+        if (!data) return reject({ status: 404, message: "User not found" });
+        return resolve(data);
+      } catch (error) {
+        return reject(error);
+      }
+    });
+  };
+
+  deleteAccount = async ({ uuid }) => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const data = await UserModel.destroy({
+          where: {
+            uuid,
+          },
+        });
+
+        if (!data) return reject({ status: 404, message: "User not found" });
+        return resolve(data);
+      } catch (error) {
+        return reject(error);
+      }
+    });
+  };
+
+  updateUser = async ({
+    uuid,
+    username,
+    first_name,
+    last_name,
+    email,
+    country_name,
+    phone_numnber,
+    date_of_birth,
+  }) => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const data = await UserModel.update(
+          {
+            first_name,
+            last_name,
+            email,
+            username,
+            country_name,
+            phone_numnber,
+            date_of_birth,
+          },
+          {
+            where: {
+              username,
+            },
+          }
+        );
+
+        if (!data) return reject({ status: 404, message: "User not found" });
+        return resolve(data);
+      } catch (error) {
+        return reject(error);
+      }
+    });
+  };
+
+  updateAccount = async ({
+    uuid,
+    username,
+    first_name,
+    last_name,
+    email,
+    role,
+    country_name,
+    phone_numnber,
+    date_of_birth,
+  }) => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const data = await UserModel.update(
+          {
+            first_name,
+            last_name,
+            email,
+            username,
+            role,
+            country_name,
+            phone_numnber,
+            date_of_birth,
+          },
+          {
+            where: {
+              uuid,
+            },
+          }
+        );
+
+        if (!data) return reject({ status: 404, message: "User not found" });
+        return resolve(data);
       } catch (error) {
         return reject(error);
       }
@@ -215,6 +325,147 @@ class User extends Response {
       const data = await this.fetchUserByUsernameOrEmail({
         username: lowerCaseUserName,
         email,
+      });
+
+      if (!data) throw new Error({ message: "Something went wrong" });
+
+      req.vm = this.prepareResponse({
+        statusCode: 200,
+        name: this?.endPointName,
+        body: data,
+        method: req?.method,
+      });
+    } catch (error) {
+      req.vm = this.prepareResponse({
+        statusCode: error?.status || 500,
+        name: this?.endPointName,
+        error: error?.message || error,
+        method: req?.method,
+      });
+    } finally {
+      next();
+    }
+  };
+
+  deleteUserEndPoint = async (req, res, next) => {
+    const { username } = req.body;
+    try {
+      const lowerCaseUserName = username?.toLowerCase();
+
+      const data = await this.deleteUser({
+        username: lowerCaseUserName,
+      });
+
+      if (!data) throw new Error({ message: "Something went wrong" });
+
+      req.vm = this.prepareResponse({
+        statusCode: 200,
+        name: this?.endPointName,
+        body: data,
+        method: req?.method,
+      });
+    } catch (error) {
+      req.vm = this.prepareResponse({
+        statusCode: error?.status || 500,
+        name: this?.endPointName,
+        error: error?.message || error,
+        method: req?.method,
+      });
+    } finally {
+      next();
+    }
+  };
+
+  deleteAccountEndPoint = async (req, res, next) => {
+    const { vm_user } = req.body;
+    try {
+      const lowerCaseUserName = username?.toLowerCase();
+
+      const data = await this.deleteAccount({
+        uuid: vm_user?.dataValues?.uuid,
+      });
+
+      if (!data) throw new Error({ message: "Something went wrong" });
+
+      req.vm = this.prepareResponse({
+        statusCode: 200,
+        name: this?.endPointName,
+        body: data,
+        method: req?.method,
+      });
+    } catch (error) {
+      req.vm = this.prepareResponse({
+        statusCode: error?.status || 500,
+        name: this?.endPointName,
+        error: error?.message || error,
+        method: req?.method,
+      });
+    } finally {
+      next();
+    }
+  };
+
+  updateUserEndPoint = async (req, res, next) => {
+    const { username } = req.body;
+    try {
+      const lowerCaseUserName = username?.toLowerCase();
+
+      const data = await this.updateUser({
+        username: lowerCaseUserName,
+        first_name,
+        last_name,
+        email,
+        role,
+        country_name,
+        phone_numnber,
+        date_of_birth,
+      });
+
+      if (!data) throw new Error({ message: "Something went wrong" });
+
+      req.vm = this.prepareResponse({
+        statusCode: 200,
+        name: this?.endPointName,
+        body: data,
+        method: req?.method,
+      });
+    } catch (error) {
+      req.vm = this.prepareResponse({
+        statusCode: error?.status || 500,
+        name: this?.endPointName,
+        error: error?.message || error,
+        method: req?.method,
+      });
+    } finally {
+      next();
+    }
+  };
+
+  updateAccountEndPoint = async (req, res, next) => {
+    const {
+      username,
+      first_name,
+      last_name,
+      email,
+      role,
+      country_name,
+      phone_numnber,
+      date_of_birth,
+      vm_user,
+    } = req.body;
+    try {
+      const lowerCaseUserName = username?.toLowerCase();
+
+      const data = await this.updateUser({
+        uuid: vm_user?.dataValues?.uuid,
+        username: lowerCaseUserName,
+        first_name,
+        last_name,
+        email,
+        role,
+        country_name,
+        phone_numnber,
+        date_of_birth,
       });
 
       if (!data) throw new Error({ message: "Something went wrong" });
