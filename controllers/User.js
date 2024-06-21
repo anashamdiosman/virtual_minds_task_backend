@@ -554,8 +554,14 @@ class User extends Response {
       phone_numnber,
       date_of_birth,
       uuid,
+      password,
     } = req.body;
     try {
+      let newPassword;
+
+      if (password) {
+        newPassword = await bcrypt.hash(password, this.saltRounds);
+      }
       const lowerCaseUserName = username?.toLowerCase();
 
       const data = await this.updateUserByUUID({
@@ -568,6 +574,7 @@ class User extends Response {
         phone_numnber,
         date_of_birth,
         uuid,
+        password: newPassword,
       });
 
       if (!data) throw new Error({ message: "Something went wrong" });
