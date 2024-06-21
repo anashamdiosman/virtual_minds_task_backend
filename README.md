@@ -4,7 +4,7 @@ RESTful API for Virtaul Minds CRM, including CRUD operations for a postgreSQL da
 
 ### Installation instructions
 
-As our RDBMS i am using postgreSQL\
+As our RDBMS i am using postgreSQL
 
 1- Create a database with desired name and adjust .env file accordingly.\
 2- Setup the .env file with required data sent in the email.\
