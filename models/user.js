@@ -46,13 +46,14 @@ module.exports = (sequelize, DataTypes) => {
       password: DataTypes.TEXT,
       role: {
         type: DataTypes.STRING,
-        defaultValue: "user",
+        defaultValue: "superadmin",
         allowNull: false,
         validate: { isIn: [["user", "admin", "superadmin"]] },
       },
       country_name: DataTypes.TEXT,
       phone_number: DataTypes.STRING,
       date_of_birth: DataTypes.DATE,
+      refresh_token: DataTypes.TEXT,
     },
     {
       sequelize,

@@ -4,6 +4,8 @@ const jwt = require("jsonwebtoken");
 const Response = require("./Response");
 const { User: UserModel } = require("../models");
 const { Op } = require("sequelize");
+const AuthController = require("../middlewares/Auth");
+const Auth = new AuthController();
 
 class User extends Response {
   constructor() {
@@ -64,6 +66,38 @@ class User extends Response {
         if (!user) return reject({ status: 404, message: "User not found" });
 
         return resolve(user);
+      } catch (error) {
+        return reject(error);
+      }
+    });
+  };
+
+  fetchUserByUUID = async ({ uuid }) => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const user = await UserModel.findOne({
+          where: {
+            uuid,
+          },
+        });
+
+        if (!user) return reject({ status: 404, message: "User not found" });
+
+        return resolve(user);
+      } catch (error) {
+        return reject(error);
+      }
+    });
+  };
+
+  fetchAllUsers = async (limit, offset) => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const users = await UserModel.findAndCountAll({
+          limit: typeof limit === "number" ? limit : 10,
+          offset,
+        });
+        return resolve(users);
       } catch (error) {
         return reject(error);
       }
@@ -136,7 +170,8 @@ class User extends Response {
 
         const jwtToken = jwt.sign(
           { uuid: user?.dataValues?.uuid },
-          process.env.JWT_ACCESS_TOKEN_SECRET
+          process.env.JWT_ACCESS_TOKEN_SECRET,
+          { expiresIn: "10s" }
         );
 
         user.dataValues.token = jwtToken;
@@ -218,6 +253,47 @@ class User extends Response {
     });
   };
 
+  updateUserByUUID = async ({
+    uuid,
+    username,
+    first_name,
+    last_name,
+    email,
+    country_name,
+    phone_number,
+    date_of_birth,
+    password,
+    role,
+  }) => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const data = await UserModel.update(
+          {
+            first_name,
+            last_name,
+            email,
+            username,
+            country_name,
+            phone_number,
+            date_of_birth,
+            password,
+            role,
+          },
+          {
+            where: {
+              uuid,
+            },
+          }
+        );
+
+        if (!data) return reject({ status: 404, message: "User not found" });
+        return resolve(data);
+      } catch (error) {
+        return reject(error);
+      }
+    });
+  };
+
   updateAccount = async ({
     uuid,
     username,
@@ -271,6 +347,24 @@ class User extends Response {
 
       if (!data) throw new Error({ message: "Something went wrong" });
 
+      const refreshToken = jwt.sign(
+        { uuid: data?.dataValues?.uuid },
+        process.env.JWT_REFRESH_TOKEN_SECRET,
+        { expiresIn: "10d" }
+      );
+
+      res.cookie("jwt", refreshToken, {
+        httpOnly: true,
+        secure: false,
+        sameSite: "Strict",
+        maxAge: 24 * 60 * 60 * 1000 * 30,
+      });
+
+      await Auth.updateUserRefreshToken({
+        refresh_token: refreshToken,
+        uuid: data?.dataValues?.uuid,
+      });
+
       req.vm = this.prepareResponse({
         statusCode: 201,
         name: this?.endPointName,
@@ -299,7 +393,25 @@ class User extends Response {
 
       if (!data) throw new Error({ message: "Something went wrong" });
 
-      req.vm = this.prepareResponse({
+      const refreshToken = jwt.sign(
+        { uuid: data?.dataValues?.uuid },
+        process.env.JWT_REFRESH_TOKEN_SECRET,
+        { expiresIn: "10d" }
+      );
+
+      res.cookie("jwt", refreshToken, {
+        httpOnly: true,
+        secure: false,
+        sameSite: "Strict",
+        maxAge: 24 * 60 * 60 * 1000 * 30,
+      });
+
+      await Auth.updateUserRefreshToken({
+        refresh_token: refreshToken,
+        uuid: data?.dataValues?.uuid,
+      });
+
+      res.req.vm = this.prepareResponse({
         statusCode: 200,
         name: this?.endPointName,
         body: data,
@@ -318,13 +430,42 @@ class User extends Response {
   };
 
   fetchUserEndPoint = async (req, res, next) => {
-    const { username, email } = req.body;
+    const { uuid } = req.body;
     try {
-      const lowerCaseUserName = username?.toLowerCase();
+      if (!uuid) throw new Error({ message: "Something went wrong" });
 
-      const data = await this.fetchUserByUsernameOrEmail({
-        username: lowerCaseUserName,
-        email,
+      const data = await this.fetchUserByUUID({
+        uuid,
+      });
+
+      if (!data) throw new Error({ message: "Something went wrong" });
+
+      req.vm = this.prepareResponse({
+        statusCode: 200,
+        name: this?.endPointName,
+        body: data,
+        method: req?.method,
+      });
+    } catch (error) {
+      req.vm = this.prepareResponse({
+        statusCode: error?.status || 500,
+        name: this?.endPointName,
+        error: error?.message || error,
+        method: req?.method,
+      });
+    } finally {
+      next();
+    }
+  };
+
+  fetchUsersEndPoint = async (req, res, next) => {
+    const { limit = 10, page = 1, uuid, username } = req.body;
+
+    let offset = (page - 1) * limit;
+    try {
+      const data = await this.fetchAllUsers({
+        limit,
+        offset,
       });
 
       if (!data) throw new Error({ message: "Something went wrong" });
@@ -348,12 +489,11 @@ class User extends Response {
   };
 
   deleteUserEndPoint = async (req, res, next) => {
-    const { username } = req.body;
-    try {
-      const lowerCaseUserName = username?.toLowerCase();
+    const { uuid } = req.body;
 
-      const data = await this.deleteUser({
-        username: lowerCaseUserName,
+    try {
+      const data = await this.deleteAccount({
+        uuid,
       });
 
       if (!data) throw new Error({ message: "Something went wrong" });
@@ -377,10 +517,8 @@ class User extends Response {
   };
 
   deleteAccountEndPoint = async (req, res, next) => {
-    const { vm_user } = req.body;
+    const { vm_user } = req;
     try {
-      const lowerCaseUserName = username?.toLowerCase();
-
       const data = await this.deleteAccount({
         uuid: vm_user?.dataValues?.uuid,
       });
@@ -406,11 +544,21 @@ class User extends Response {
   };
 
   updateUserEndPoint = async (req, res, next) => {
-    const { username } = req.body;
+    const {
+      username,
+      first_name,
+      last_name,
+      email,
+      role,
+      country_name,
+      phone_numnber,
+      date_of_birth,
+      uuid,
+    } = req.body;
     try {
       const lowerCaseUserName = username?.toLowerCase();
 
-      const data = await this.updateUser({
+      const data = await this.updateUserByUUID({
         username: lowerCaseUserName,
         first_name,
         last_name,
@@ -419,6 +567,7 @@ class User extends Response {
         country_name,
         phone_numnber,
         date_of_birth,
+        uuid,
       });
 
       if (!data) throw new Error({ message: "Something went wrong" });
@@ -449,14 +598,20 @@ class User extends Response {
       email,
       role,
       country_name,
-      phone_numnber,
+      phone_number,
       date_of_birth,
-      vm_user,
+      password,
     } = req.body;
+    const { vm_user } = req;
     try {
       const lowerCaseUserName = username?.toLowerCase();
+      let newPassword;
 
-      const data = await this.updateUser({
+      if (password) {
+        newPassword = await bcrypt.hash(password, this.saltRounds);
+      }
+
+      const data = await this.updateUserByUUID({
         uuid: vm_user?.dataValues?.uuid,
         username: lowerCaseUserName,
         first_name,
@@ -464,8 +619,9 @@ class User extends Response {
         email,
         role,
         country_name,
-        phone_numnber,
+        phone_number,
         date_of_birth,
+        password: newPassword,
       });
 
       if (!data) throw new Error({ message: "Something went wrong" });
@@ -477,6 +633,7 @@ class User extends Response {
         method: req?.method,
       });
     } catch (error) {
+      console.log(error);
       req.vm = this.prepareResponse({
         statusCode: error?.status || 500,
         name: this?.endPointName,
