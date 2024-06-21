@@ -129,18 +129,43 @@ class Auth {
 
       const user = await this.findUserByRefreshToken({ refresh_token: token });
 
-      const newAuthToken = jwt.sign(
+      const decoded = jwt.verify(token, process.env.JWT_REFRESH_TOKEN_SECRET);
+
+      console.log(decoded);
+      if (user?.dataValues?.uuid !== decoded?.uuid) return res.status(403);
+
+      const accessToken = jwt.sign(
         {
-          uuid: user?.dataValues?.uuid,
+          uuid: decoded?.uuid,
         },
         process.env.JWT_ACCESS_TOKEN_SECRET,
         { expiresIn: "1d" }
       );
 
-      user.dataValues.token = newAuthToken;
+      const newRefreshToken = jwt.sign(
+        { uuid: user?.dataValues?.uuid },
+        process.env.JWT_REFRESH_TOKEN_SECRET,
+        { expiresIn: "30d" }
+      );
+
+      await this.updateUserRefreshToken({
+        uuid: decoded?.uuid,
+        refresh_token: newRefreshToken,
+      });
+
+      res.cookie("jwt", newRefreshToken, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "Strict",
+        maxAge: 24 * 60 * 60 * 1000 * 30,
+      });
+
+      user.dataValues.token = accessToken;
 
       return res.json({ user });
     } catch (error) {
+      if (error?.message === "jwt expired") return res.sendStatus(403);
+      // console.log(error?.message);
       return res.status(500).json({ message: "Something went wrong" });
     }
   };
