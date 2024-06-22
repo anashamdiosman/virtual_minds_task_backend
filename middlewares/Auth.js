@@ -2,6 +2,22 @@ const { User } = require("../models");
 const jwt = require("jsonwebtoken");
 
 class Auth {
+  findUserByUUID = ({ uuid }) => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const foundUser = await User.findOne({
+          where: {
+            uuid,
+          },
+        });
+        if (!foundUser) return resolve(null);
+        resolve(foundUser);
+      } catch (error) {
+        reject(error);
+      }
+    });
+  };
+
   findUserByRefreshToken = ({ refresh_token }) => {
     return new Promise(async (resolve, reject) => {
       try {
@@ -129,9 +145,10 @@ class Auth {
 
       const user = await this.findUserByRefreshToken({ refresh_token: token });
 
+      if (!user) return res.sendStatus(401);
+
       const decoded = jwt.verify(token, process.env.JWT_REFRESH_TOKEN_SECRET);
 
-      console.log(decoded);
       if (user?.dataValues?.uuid !== decoded?.uuid) return res.status(403);
 
       const accessToken = jwt.sign(
@@ -139,31 +156,19 @@ class Auth {
           uuid: decoded?.uuid,
         },
         process.env.JWT_ACCESS_TOKEN_SECRET,
-        { expiresIn: "1d" }
+        { expiresIn: "15m" }
       );
 
-      const newRefreshToken = jwt.sign(
-        { uuid: user?.dataValues?.uuid },
-        process.env.JWT_REFRESH_TOKEN_SECRET,
-        { expiresIn: "30d" }
-      );
-
-      await this.updateUserRefreshToken({
-        uuid: decoded?.uuid,
-        refresh_token: newRefreshToken,
-      });
-
-      res.cookie("jwt", newRefreshToken, {
-        httpOnly: true,
-        secure: true,
-        sameSite: "Strict",
-        maxAge: 24 * 60 * 60 * 1000 * 30,
-      });
+      // await this.updateUserRefreshToken({
+      //   uuid: decoded?.uuid,
+      //   refresh_token: newRefreshToken,
+      // });
 
       user.dataValues.token = accessToken;
 
       return res.json({ user });
     } catch (error) {
+      console.log(error);
       if (error?.message === "jwt expired") return res.sendStatus(403);
       // console.log(error?.message);
       return res.status(500).json({ message: "Something went wrong" });
@@ -189,38 +194,57 @@ class Auth {
 
   authenticateUserIsAdmin = async (req, res, next) => {
     try {
-      const token = req.cookies.jwt;
+      if (!req?.headers?.authorization) {
+        return res.status(403);
+      }
+      const accessToken = req?.headers?.authorization?.split(" ")?.[1];
 
-      if (!token) return res.sendStatus(401);
+      const decoded = jwt?.verify(
+        accessToken,
+        process.env.JWT_ACCESS_TOKEN_SECRET
+      );
 
-      const user = await this.findUserByRefreshToken({ refresh_token: token });
+      const user = await this?.findUserByUUID({
+        uuid: decoded?.uuid,
+      });
 
       if (user?.dataValues?.role === "user") return res.sendStatus(401);
-
-      req.vm_user = user;
-
-      return next();
-    } catch (error) {
-      console.log(error);
-      return res.status(500).json({ message: "Something went wrong" });
-    }
-  };
-
-  AuthenticateUserMiddleware = async (req, res, next) => {
-    try {
-      const jwt = req?.cookies?.jwt;
-
-      if (!jwt) return res.sendStatus(401);
-
-      const user = await this.findUserByRefreshToken({ refresh_token: jwt });
 
       if (user) {
         req.vm_user = user;
         return next();
       }
-      return res.sendStatus(401);
+      // return res.sendStatus(403);
     } catch (error) {
-      return res.sendStatus(401);
+      return res.sendStatus(403);
+    }
+  };
+
+  AuthenticateUserMiddleware = async (req, res, next) => {
+    try {
+      // console.log(req.headers);
+      if (!req?.headers?.authorization) {
+        return res.status(403);
+      }
+
+      const accessToken = req?.headers?.authorization?.split(" ")?.[1];
+
+      const decoded = jwt?.verify(
+        accessToken,
+        process.env.JWT_ACCESS_TOKEN_SECRET
+      );
+
+      const user = await this?.findUserByUUID({
+        uuid: decoded?.uuid,
+      });
+
+      if (user) {
+        req.vm_user = user;
+        return next();
+      }
+      // return res.sendStatus(403);
+    } catch (error) {
+      return res.sendStatus(403);
     }
   };
 

@@ -23,14 +23,14 @@ router.post("/logout", AuthInstance?.logoutUser);
 
 router.post(
   "/fetch",
-  AuthInstance.AuthenticateUserMiddleware,
+  AuthInstance.authenticateUserIsAdmin,
   UserInstance?.fetchUserEndPoint,
   UserInstance?.sendResponseStatusToUser
 );
 
 router.post(
   "/fetch-all",
-  AuthInstance.AuthenticateUserMiddleware,
+  AuthInstance.authenticateUserIsAdmin,
   UserInstance?.fetchUsersEndPoint,
   UserInstance?.sendResponseStatusToUser
 );

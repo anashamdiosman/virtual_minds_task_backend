@@ -393,10 +393,16 @@ class User extends Response {
 
       if (!data) throw new Error({ message: "Something went wrong" });
 
+      const accessToken = jwt.sign(
+        { uuid: data?.dataValues?.uuid },
+        process.env.JWT_ACCESS_TOKEN_SECRET,
+        { expiresIn: "15m" }
+      );
+
       const refreshToken = jwt.sign(
         { uuid: data?.dataValues?.uuid },
         process.env.JWT_REFRESH_TOKEN_SECRET,
-        { expiresIn: "10d" }
+        { expiresIn: "7d" }
       );
 
       res.cookie("jwt", refreshToken, {
@@ -410,6 +416,8 @@ class User extends Response {
         refresh_token: refreshToken,
         uuid: data?.dataValues?.uuid,
       });
+
+      data.dataValues.token = accessToken;
 
       res.req.vm = this.prepareResponse({
         statusCode: 200,
@@ -459,7 +467,7 @@ class User extends Response {
   };
 
   fetchUsersEndPoint = async (req, res, next) => {
-    const { limit = 10, page = 1, uuid, username } = req.body;
+    const { limit = 10, page = 1 } = req.body;
 
     let offset = (page - 1) * limit;
     try {
@@ -551,7 +559,7 @@ class User extends Response {
       email,
       role,
       country_name,
-      phone_numnber,
+      phone_number,
       date_of_birth,
       uuid,
       password,
@@ -571,7 +579,7 @@ class User extends Response {
         email,
         role,
         country_name,
-        phone_numnber,
+        phone_number,
         date_of_birth,
         uuid,
         password: newPassword,
